@@ -1,11 +1,8 @@
 library(tmap)
 library(shiny)
-
-packageurl <- "https://cran.r-project.org/src/contrib/Archive/sf/sf_0.7-3.tar.gz"
-install.packages(packageurl, repos=NULL, type="source")
-
 source("coronaData.R")
 #library(rsconnect)
+
 
 
 
@@ -28,6 +25,9 @@ ui <- fluidPage(
                    step = 1,
                    animate = TRUE),
     ),
+    column(width=1,
+           checkboxInput("res", "reset-map", FALSE),      
+    ),
   ),
 )
 
@@ -40,7 +40,7 @@ server <- function(input, output, session) {
   output$map <- renderTmap({
     tm_shape(total2[total2$RDate==min(total2$RDate),]) + 
       tm_polygons(col="total_deaths",
-                  zindex = 401,
+                  #zindex = 401,
                   id="location",)
   })
   
@@ -63,25 +63,26 @@ server <- function(input, output, session) {
     } else if (input$var=="new_deaths"){
       vbreaks = c(0,0.1,10,50,100,500,100000)
       vlabels = c("0","1 to 9","10 to 49","50 to 99", "100 to 499", "more than 500")
-    } else if (input$var=="new_cases_per_million"){
-      vbreaks = c(0,1,10,50,100,500)
-      vlabels = c("0 to 1","1 to 10","10 to 49","50 to 99", "more than 100")
-    } else if (input$var=="new_deaths_per_million"){
-      vbreaks = c(0,1,5,10,50)
-      vlabels = c("0 to 1","1 to 5","5 to 10","more than 10")
-    } else if (input$var=="new_tests_per_thousand" | input$var=="new_tests_smoothed_per_thousand"){
-      vbreaks = c(0,1,2,5,10)
-      vlabels = c("0 to 1","1 to 2","2 to 5","more than 5")
-    } 
+    }
     else {
       vbreaks = round(seq(0,max(total2[[input$var]],na.rm=TRUE),length.out=6),digits=0)
-      vlabels = paste(vbreaks[1:length(vbreaks)-1])
+      vlabels = paste(vbreaks[2:length(vbreaks)])
     }
     
     dat = total2[total2$RDate== input$slider,]
     dat[[input$var]][dat[[input$var]]<0]=NA 
     
-    if(input$slider==lastindex()+1 ){
+    if(input$res){
+      output$map <- renderTmap({
+        tm_shape(dat) + 
+          tm_polygons(col=input$var,
+                      #zindex = 401,
+                      breaks = vbreaks,
+                      labels = vlabels,      
+                      id="location",)
+      })
+    }
+    if(input$slider==lastindex()+1 &!input$res ){
       
       tmapProxy("map", session, {
         #tm_remove_layer((401)) +
@@ -108,10 +109,9 @@ server <- function(input, output, session) {
       animationmode(FALSE)
       
     }
-    else if(!animationmode()){
+    else if(!animationmode() & !input$res){
       # use regular mode
       tmapProxy("map", session, {
-        tm_remove_layer((401)) +
           tm_shape( dat) + 
           tm_polygons(col=input$var,
                       breaks = vbreaks,
